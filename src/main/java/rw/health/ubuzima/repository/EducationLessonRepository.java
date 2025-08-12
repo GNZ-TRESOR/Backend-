@@ -67,4 +67,10 @@ public interface EducationLessonRepository extends JpaRepository<EducationLesson
     List<EducationLesson> findByCategoryAndIsPublishedFalseOrderByOrderIndexAsc(EducationCategory category);
 
     Long countByLevelAndIsPublishedTrue(EducationLevel level);
+
+    // ============ ADVANCED SEARCH METHODS ============
+
+    List<EducationLesson> findByTitleContainingIgnoreCase(String title);
+
+    List<EducationLesson> findByTitleContainingIgnoreCaseOrContentContainingIgnoreCase(String title, String content);
 }

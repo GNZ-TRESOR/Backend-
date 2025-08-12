@@ -65,4 +65,8 @@ public interface MessageRepository extends JpaRepository<Message, Long> {
 
     @Query("SELECT COALESCE(SUM(m.fileSize), 0) FROM Message m WHERE m.messageType IN ('AUDIO', 'VOICE') AND m.fileSize IS NOT NULL")
     long sumAudioFileSize();
+
+    // ============ ANALYTICS METHODS ============
+
+    long countByCreatedAtAfter(LocalDateTime date);
 }

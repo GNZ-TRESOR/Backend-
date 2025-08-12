@@ -45,4 +45,10 @@ public interface SupportGroupRepository extends JpaRepository<SupportGroup, Long
     @Query("SELECT sg FROM SupportGroup sg WHERE sg.isActive = true " +
            "ORDER BY sg.memberCount DESC, sg.createdAt DESC")
     List<SupportGroup> findPopularGroups();
+
+    // ============ ADVANCED SEARCH METHODS ============
+
+    List<SupportGroup> findByNameContainingIgnoreCaseOrDescriptionContainingIgnoreCase(String name, String description);
+
+    long countByIsActiveTrue();
 }

@@ -48,4 +48,12 @@ public interface NotificationRepository extends JpaRepository<Notification, Long
 
     // Analytics methods needed by AnalyticsServiceImpl
     long countByIsRead(boolean isRead);
+
+    // ============ ADVANCED ANALYTICS METHODS ============
+
+    long countByCreatedAtBefore(LocalDateTime date);
+
+    void deleteByCreatedAtBefore(LocalDateTime date);
+
+    long countByIsReadTrue();
 }

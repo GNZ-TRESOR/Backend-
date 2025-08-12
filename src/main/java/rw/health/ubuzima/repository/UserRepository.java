@@ -82,4 +82,27 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     @Query("SELECT u FROM User u WHERE u.village = :village AND u.role = 'CLIENT' AND u.status = 'ACTIVE'")
     List<User> findActiveClientsByVillage(@Param("village") String village);
+
+    // ============ ADVANCED SEARCH METHODS ============
+
+    List<User> findByNameContainingIgnoreCase(String name);
+
+    List<User> findByEmailContainingIgnoreCase(String email);
+
+    List<User> findByNameContainingIgnoreCaseOrEmailContainingIgnoreCase(String name, String email);
+
+    org.springframework.data.domain.Page<User> findByNameContainingIgnoreCase(String name, org.springframework.data.domain.Pageable pageable);
+
+    org.springframework.data.domain.Page<User> findByEmailContainingIgnoreCase(String email, org.springframework.data.domain.Pageable pageable);
+
+    org.springframework.data.domain.Page<User> findByRole(UserRole role, org.springframework.data.domain.Pageable pageable);
+
+    org.springframework.data.domain.Page<User> findByDistrictContainingIgnoreCaseOrSectorContainingIgnoreCaseOrCellContainingIgnoreCaseOrVillageContainingIgnoreCase(
+        String district, String sector, String cell, String village, org.springframework.data.domain.Pageable pageable);
+
+    // ============ ANALYTICS METHODS ============
+
+    long countByCreatedAtAfter(LocalDateTime date);
+
+    long countByLastLoginAtAfter(LocalDateTime date);
 }

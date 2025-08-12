@@ -97,4 +97,27 @@ public class CommunityEventController {
             ));
         }
     }
+
+    /**
+     * Get user's events (events they created or are attending)
+     */
+    @GetMapping("/my-events")
+    public ResponseEntity<Map<String, Object>> getMyEvents() {
+        try {
+            // For now, return empty list - this can be enhanced later with actual user events
+            List<CommunityEvent> myEvents = List.of();
+
+            return ResponseEntity.ok(Map.of(
+                "success", true,
+                "events", myEvents,
+                "message", "User events retrieved successfully"
+            ));
+        } catch (Exception e) {
+            logger.error("Error retrieving user events", e);
+            return ResponseEntity.internalServerError().body(Map.of(
+                "success", false,
+                "message", "Failed to retrieve user events: " + e.getMessage()
+            ));
+        }
+    }
 }

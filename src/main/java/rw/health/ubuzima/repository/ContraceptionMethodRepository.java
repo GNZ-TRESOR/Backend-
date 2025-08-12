@@ -85,4 +85,8 @@ public interface ContraceptionMethodRepository extends JpaRepository<Contracepti
     List<ContraceptionMethod> findByNextAppointmentBeforeAndIsActiveTrue(LocalDate date);
 
     List<ContraceptionMethod> findByEndDateBeforeAndIsActiveTrue(LocalDate date);
+
+    // ============ ADVANCED SEARCH METHODS ============
+
+    List<ContraceptionMethod> findByNameContainingIgnoreCase(String name);
 }

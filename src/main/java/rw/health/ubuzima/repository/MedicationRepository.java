@@ -24,4 +24,10 @@ public interface MedicationRepository extends JpaRepository<Medication, Long> {
     
     @Query("SELECT m FROM Medication m WHERE m.user = :user AND m.endDate IS NOT NULL AND m.endDate BETWEEN :startDate AND :endDate")
     List<Medication> findMedicationsEndingBetween(@Param("user") User user, @Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate);
+
+    // ============ ADVANCED SEARCH METHODS ============
+
+    List<Medication> findByNameContainingIgnoreCase(String name);
+
+    long countByIsActiveTrue();
 }

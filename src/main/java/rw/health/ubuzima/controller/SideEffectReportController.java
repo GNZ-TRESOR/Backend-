@@ -4,10 +4,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import rw.health.ubuzima.repository.UserRepository;
-import rw.health.ubuzima.repository.UserSideEffectReportRepository;
+import rw.health.ubuzima.repository.SideEffectReportRepository;
 import rw.health.ubuzima.repository.ContraceptionMethodRepository;
 import rw.health.ubuzima.entity.User;
-import rw.health.ubuzima.entity.UserSideEffectReport;
+import rw.health.ubuzima.entity.SideEffectReport;
 import rw.health.ubuzima.entity.ContraceptionMethod;
 
 import java.time.LocalDate;
@@ -23,7 +23,7 @@ import java.util.stream.Collectors;
 public class SideEffectReportController {
 
     private final UserRepository userRepository;
-    private final UserSideEffectReportRepository sideEffectReportRepository;
+    private final SideEffectReportRepository sideEffectReportRepository;
     private final ContraceptionMethodRepository contraceptionMethodRepository;
 
     // Create side effect report
@@ -51,18 +51,17 @@ public class SideEffectReportController {
                 ));
             }
 
-            UserSideEffectReport report = UserSideEffectReport.builder()
+            SideEffectReport report = SideEffectReport.builder()
                 .user(user)
                 .contraceptionMethod(contraceptionMethod)
-                .sideEffectName(request.get("sideEffectName").toString())
-                .severity(UserSideEffectReport.SideEffectSeverity.valueOf(request.get("severity").toString().toUpperCase()))
-                .frequency(UserSideEffectReport.SideEffectFrequency.valueOf(request.get("frequency").toString().toUpperCase()))
+                .sideEffectType(request.get("sideEffectType").toString())
+                .severity(SideEffectReport.SideEffectSeverity.valueOf(request.get("severity").toString().toUpperCase()))
                 .description(request.get("description") != null ? request.get("description").toString() : null)
-                .dateReported(LocalDate.now())
-                .isResolved(false)
+                .startedAt(LocalDate.now())
+                .isOngoing(true)
                 .build();
 
-            UserSideEffectReport savedReport = sideEffectReportRepository.save(report);
+            SideEffectReport savedReport = sideEffectReportRepository.save(report);
 
             return ResponseEntity.ok(Map.of(
                 "success", true,
@@ -82,7 +81,7 @@ public class SideEffectReportController {
     @GetMapping
     public ResponseEntity<Map<String, Object>> getSideEffectReports() {
         try {
-            List<UserSideEffectReport> reports = sideEffectReportRepository.findAll();
+            List<SideEffectReport> reports = sideEffectReportRepository.findAll();
             List<Map<String, Object>> reportMaps = reports.stream()
                 .map(this::convertToMap)
                 .collect(Collectors.toList());
@@ -104,7 +103,7 @@ public class SideEffectReportController {
     @GetMapping("/user/{userId}")
     public ResponseEntity<Map<String, Object>> getSideEffectReportsByUser(@PathVariable Long userId) {
         try {
-            List<UserSideEffectReport> reports = sideEffectReportRepository.findByUserIdOrderByDateReportedDesc(userId);
+            List<SideEffectReport> reports = sideEffectReportRepository.findByUserIdOrderByReportedAtDesc(userId);
             List<Map<String, Object>> reportMaps = reports.stream()
                 .map(this::convertToMap)
                 .collect(Collectors.toList());
@@ -128,33 +127,31 @@ public class SideEffectReportController {
             @PathVariable Long reportId,
             @RequestBody Map<String, Object> request) {
         try {
-            UserSideEffectReport report = sideEffectReportRepository.findById(reportId).orElse(null);
+            SideEffectReport report = sideEffectReportRepository.findById(reportId).orElse(null);
 
             if (report == null) {
                 return ResponseEntity.notFound().build();
             }
 
             // Update fields if provided
-            if (request.containsKey("sideEffectName")) {
-                report.setSideEffectName(request.get("sideEffectName").toString());
+            if (request.containsKey("sideEffectType")) {
+                report.setSideEffectType(request.get("sideEffectType").toString());
             }
             if (request.containsKey("severity")) {
-                report.setSeverity(UserSideEffectReport.SideEffectSeverity.valueOf(request.get("severity").toString().toUpperCase()));
-            }
-            if (request.containsKey("frequency")) {
-                report.setFrequency(UserSideEffectReport.SideEffectFrequency.valueOf(request.get("frequency").toString().toUpperCase()));
+                report.setSeverity(SideEffectReport.SideEffectSeverity.valueOf(request.get("severity").toString().toUpperCase()));
             }
             if (request.containsKey("description")) {
                 report.setDescription(request.get("description").toString());
             }
-            if (request.containsKey("isResolved")) {
-                report.setIsResolved((Boolean) request.get("isResolved"));
+            if (request.containsKey("endedAt")) {
+                report.setEndedAt(LocalDate.parse(request.get("endedAt").toString()));
+                report.setIsOngoing(false);
             }
-            if (request.containsKey("resolutionNotes")) {
-                report.setResolutionNotes(request.get("resolutionNotes").toString());
+            if (request.containsKey("isOngoing")) {
+                report.setIsOngoing((Boolean) request.get("isOngoing"));
             }
 
-            UserSideEffectReport updatedReport = sideEffectReportRepository.save(report);
+            SideEffectReport updatedReport = sideEffectReportRepository.save(report);
 
             return ResponseEntity.ok(Map.of(
                 "success", true,
@@ -194,20 +191,20 @@ public class SideEffectReportController {
     }
 
     // Helper method to convert entity to map
-    private Map<String, Object> convertToMap(UserSideEffectReport report) {
+    private Map<String, Object> convertToMap(SideEffectReport report) {
         Map<String, Object> map = new HashMap<>();
         map.put("id", report.getId());
         map.put("userId", report.getUser().getId());
         map.put("userName", report.getUser().getName());
         map.put("contraceptionMethodId", report.getContraceptionMethod().getId());
         map.put("contraceptionMethodName", report.getContraceptionMethod().getName());
-        map.put("sideEffectName", report.getSideEffectName());
+        map.put("sideEffectType", report.getSideEffectType());
         map.put("severity", report.getSeverity().toString());
-        map.put("frequency", report.getFrequency().toString());
         map.put("description", report.getDescription());
-        map.put("dateReported", report.getDateReported().toString());
-        map.put("isResolved", report.getIsResolved());
-        map.put("resolutionNotes", report.getResolutionNotes());
+        map.put("startedAt", report.getStartedAt().toString());
+        map.put("endedAt", report.getEndedAt() != null ? report.getEndedAt().toString() : null);
+        map.put("isOngoing", report.getIsOngoing());
+        map.put("reportedAt", report.getReportedAt().toString());
         map.put("createdAt", report.getCreatedAt());
         map.put("updatedAt", report.getUpdatedAt());
         return map;

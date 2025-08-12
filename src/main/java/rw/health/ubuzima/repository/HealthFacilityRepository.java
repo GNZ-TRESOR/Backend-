@@ -41,4 +41,10 @@ public interface HealthFacilityRepository extends JpaRepository<HealthFacility, 
 
     // Analytics methods needed by AnalyticsServiceImpl
     long countByIsActive(boolean isActive);
+
+    // ============ ADVANCED SEARCH METHODS ============
+
+    List<HealthFacility> findByNameContainingIgnoreCase(String name);
+
+    List<HealthFacility> findByAddressContainingIgnoreCase(String address);
 }
