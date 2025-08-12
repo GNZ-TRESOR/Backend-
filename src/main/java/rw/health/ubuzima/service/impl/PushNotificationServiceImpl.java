@@ -42,7 +42,7 @@ public class PushNotificationServiceImpl implements PushNotificationService {
             notification.setUser(user);
             notification.setTitle(title);
             notification.setMessage(message);
-            notification.setType(NotificationType.PUSH);
+            notification.setType(NotificationType.SYSTEM_NOTIFICATION);
             notification.setIsRead(false);
             notificationRepository.save(notification);
 

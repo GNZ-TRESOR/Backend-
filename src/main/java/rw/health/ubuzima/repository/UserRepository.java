@@ -73,4 +73,13 @@ public interface UserRepository extends JpaRepository<User, Long> {
     List<User> findTop10ByOrderByCreatedAtDesc();
 
     List<User> findByFacilityIdAndRole(String facilityId, UserRole role);
+
+    // Village-based assignment methods for health workers
+    List<User> findByVillageAndRole(String village, UserRole role);
+
+    @Query("SELECT u FROM User u WHERE u.village = :village AND u.role = :role AND u.status = 'ACTIVE'")
+    List<User> findActiveUsersByVillageAndRole(@Param("village") String village, @Param("role") UserRole role);
+
+    @Query("SELECT u FROM User u WHERE u.village = :village AND u.role = 'CLIENT' AND u.status = 'ACTIVE'")
+    List<User> findActiveClientsByVillage(@Param("village") String village);
 }

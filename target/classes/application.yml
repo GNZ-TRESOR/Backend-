@@ -94,6 +94,9 @@ ubuzima:
     upload-dir: ${FILE_UPLOAD_DIR:./uploads}
     max-size: ${FILE_MAX_SIZE:10485760} # 10MB
 
+  voice-note:
+    retention-days: ${VOICE_NOTE_RETENTION_DAYS:7} # 1 week retention
+
 ---
 spring:
   config:

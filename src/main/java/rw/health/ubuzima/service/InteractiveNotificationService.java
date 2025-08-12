@@ -2,6 +2,8 @@ package rw.health.ubuzima.service;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import rw.health.ubuzima.constants.NotificationConstants;
 import rw.health.ubuzima.dto.response.ApiResponse;
 import rw.health.ubuzima.entity.Notification;
@@ -44,6 +46,7 @@ public class InteractiveNotificationService {
     }
     
     // Send error notification to user
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void sendErrorNotification(Long userId, String operation, String errorMessage, String errorCode) {
         try {
             User user = userRepository.findById(userId).orElse(null);
@@ -67,6 +70,7 @@ public class InteractiveNotificationService {
     }
     
     // Send warning notification to user
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void sendWarningNotification(Long userId, String operation, String warningMessage) {
         try {
             User user = userRepository.findById(userId).orElse(null);
@@ -90,6 +94,7 @@ public class InteractiveNotificationService {
     }
     
     // Send info notification to user
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void sendInfoNotification(Long userId, String operation, String infoMessage) {
         try {
             User user = userRepository.findById(userId).orElse(null);

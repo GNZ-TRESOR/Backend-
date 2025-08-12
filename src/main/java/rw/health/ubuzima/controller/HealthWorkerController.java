@@ -28,6 +28,8 @@ import rw.health.ubuzima.enums.StiTestType;
 import rw.health.ubuzima.enums.TestResultStatus;
 import rw.health.ubuzima.enums.TicketStatus;
 import rw.health.ubuzima.enums.TicketPriority;
+import rw.health.ubuzima.service.AppointmentNotificationService;
+import rw.health.ubuzima.service.AppointmentStatusSchedulerService;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -53,14 +55,16 @@ public class HealthWorkerController {
     private final SupportGroupRepository supportGroupRepository;
     private final SupportTicketRepository supportTicketRepository;
     private final CommunityEventRepository communityEventRepository;
+    private final AppointmentNotificationService appointmentNotificationService;
+    private final AppointmentStatusSchedulerService appointmentStatusSchedulerService;
 
-    // Get assigned clients
+    // Get assigned clients (village-based assignment)
     @GetMapping("/{healthWorkerId}/clients")
     @PreAuthorize("hasAnyRole('ADMIN', 'HEALTH_WORKER')")
     public ResponseEntity<Map<String, Object>> getAssignedClients(@PathVariable Long healthWorkerId) {
         try {
             User healthWorker = userRepository.findById(healthWorkerId).orElse(null);
-            
+
             if (healthWorker == null || !healthWorker.isHealthWorker()) {
                 return ResponseEntity.badRequest().body(Map.of(
                     "success", false,
@@ -68,8 +72,15 @@ public class HealthWorkerController {
                 ));
             }
 
-            // Get clients from the same facility as the health worker
-            List<User> clients = userRepository.findByFacilityIdAndRole(healthWorker.getFacilityId(), UserRole.CLIENT);
+            List<User> clients = new ArrayList<>();
+
+            // Village-based assignment: Get clients from the same village as the health worker
+            if (healthWorker.getVillage() != null && !healthWorker.getVillage().isEmpty()) {
+                clients = userRepository.findByVillageAndRole(healthWorker.getVillage(), UserRole.CLIENT);
+            } else {
+                // Fallback to facility-based assignment if village is not set
+                clients = userRepository.findByFacilityIdAndRole(healthWorker.getFacilityId(), UserRole.CLIENT);
+            }
 
             List<UserResponse> clientResponses = clients.stream()
                 .map(this::convertToUserResponse)
@@ -77,7 +88,10 @@ public class HealthWorkerController {
 
             return ResponseEntity.ok(Map.of(
                 "success", true,
-                "clients", clientResponses
+                "clients", clientResponses,
+                "assignmentType", healthWorker.getVillage() != null ? "village" : "facility",
+                "assignmentLocation", healthWorker.getVillage() != null ? healthWorker.getVillage() : healthWorker.getFacilityId(),
+                "totalClients", clients.size()
             ));
 
         } catch (Exception e) {
@@ -145,22 +159,30 @@ public class HealthWorkerController {
             }
 
             String statusStr = request.get("status");
-            AppointmentStatus status = AppointmentStatus.valueOf(statusStr.toUpperCase());
-            
-            appointment.setStatus(status);
-            
-            if (status == AppointmentStatus.COMPLETED) {
+            AppointmentStatus oldStatus = appointment.getStatus();
+            AppointmentStatus newStatus = AppointmentStatus.valueOf(statusStr.toUpperCase());
+            String reason = request.get("reason");
+
+            // Update appointment status
+            appointment.setStatus(newStatus);
+
+            // Set appropriate timestamps
+            if (newStatus == AppointmentStatus.COMPLETED) {
                 appointment.setCompletedAt(LocalDateTime.now());
-            } else if (status == AppointmentStatus.CANCELLED) {
+            } else if (newStatus == AppointmentStatus.CANCELLED) {
                 appointment.setCancelledAt(LocalDateTime.now());
-                appointment.setCancellationReason(request.get("reason"));
+                appointment.setCancellationReason(reason);
             }
 
             appointmentRepository.save(appointment);
 
+            // Send appropriate notifications based on status change
+            sendStatusChangeNotifications(appointment, oldStatus, newStatus, reason);
+
             return ResponseEntity.ok(Map.of(
                 "success", true,
-                "message", "Appointment status updated successfully"
+                "message", "Appointment status updated successfully",
+                "appointment", appointment
             ));
 
         } catch (Exception e) {
@@ -168,6 +190,34 @@ public class HealthWorkerController {
                 "success", false,
                 "message", "Failed to update appointment: " + e.getMessage()
             ));
+        }
+    }
+
+    /**
+     * Send appropriate notifications based on status change
+     */
+    private void sendStatusChangeNotifications(Appointment appointment,
+                                             AppointmentStatus oldStatus,
+                                             AppointmentStatus newStatus,
+                                             String reason) {
+        try {
+            switch (newStatus) {
+                case CONFIRMED:
+                    appointmentNotificationService.sendAppointmentApprovalNotification(appointment);
+                    break;
+                case CANCELLED:
+                    appointmentNotificationService.sendAppointmentCancellationNotification(appointment, reason);
+                    break;
+                case RESCHEDULED:
+                    appointmentNotificationService.sendAppointmentRescheduleNotification(appointment, reason);
+                    break;
+                default:
+                    appointmentNotificationService.sendAppointmentStatusChangeNotification(appointment, oldStatus, newStatus);
+                    break;
+            }
+        } catch (Exception e) {
+            // Log error but don't fail the status update
+            System.err.println("Failed to send notification for appointment status change: " + e.getMessage());
         }
     }
 
@@ -246,17 +296,30 @@ public class HealthWorkerController {
         }
     }
 
-    // Get health worker dashboard stats
+    // Get health worker dashboard stats (village-based)
     @GetMapping("/{healthWorkerId}/dashboard/stats")
     public ResponseEntity<Map<String, Object>> getDashboardStats(@PathVariable Long healthWorkerId) {
         try {
             User healthWorker = userRepository.findById(healthWorkerId).orElse(null);
-            
+
             if (healthWorker == null || !healthWorker.isHealthWorker()) {
                 return ResponseEntity.badRequest().body(Map.of(
                     "success", false,
                     "message", "Health worker not found"
                 ));
+            }
+
+            // Get assigned clients based on village assignment
+            List<User> assignedClients = new ArrayList<>();
+            String assignmentType = "facility";
+            String assignmentLocation = healthWorker.getFacilityId();
+
+            if (healthWorker.getVillage() != null && !healthWorker.getVillage().isEmpty()) {
+                assignedClients = userRepository.findActiveClientsByVillage(healthWorker.getVillage());
+                assignmentType = "village";
+                assignmentLocation = healthWorker.getVillage();
+            } else {
+                assignedClients = userRepository.findByFacilityIdAndRole(healthWorker.getFacilityId(), UserRole.CLIENT);
             }
 
             List<Appointment> allAppointments = appointmentRepository.findByHealthWorker(healthWorker);
@@ -267,16 +330,16 @@ public class HealthWorkerController {
             long completedAppointments = allAppointments.stream()
                 .filter(apt -> apt.getStatus() == AppointmentStatus.COMPLETED)
                 .count();
-            long totalClients = allAppointments.stream()
-                .map(Appointment::getUser)
-                .distinct()
-                .count();
 
             Map<String, Object> stats = new HashMap<>();
             stats.put("totalAppointments", totalAppointments);
             stats.put("todayAppointments", todayAppointments);
             stats.put("completedAppointments", completedAppointments);
-            stats.put("totalClients", totalClients);
+            stats.put("totalClients", assignedClients.size()); // Use village-based count
+            stats.put("assignmentType", assignmentType);
+            stats.put("assignmentLocation", assignmentLocation);
+            stats.put("healthWorkerVillage", healthWorker.getVillage());
+            stats.put("healthWorkerLocation", healthWorker.getFullLocation());
 
             return ResponseEntity.ok(Map.of(
                 "success", true,
@@ -1244,6 +1307,27 @@ public class HealthWorkerController {
             return ResponseEntity.internalServerError().body(Map.of(
                 "success", false,
                 "message", "Failed to export report: " + e.getMessage()
+            ));
+        }
+    }
+
+    /**
+     * Manual trigger for appointment status updates (for testing)
+     */
+    @PostMapping("/appointments/update-statuses")
+    public ResponseEntity<Map<String, Object>> triggerAppointmentStatusUpdate() {
+        try {
+            appointmentStatusSchedulerService.updateAppointmentStatuses();
+
+            return ResponseEntity.ok(Map.of(
+                "success", true,
+                "message", "Appointment status update completed successfully"
+            ));
+
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body(Map.of(
+                "success", false,
+                "message", "Failed to update appointment statuses: " + e.getMessage()
             ));
         }
     }

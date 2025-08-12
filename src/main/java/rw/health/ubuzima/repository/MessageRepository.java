@@ -2,15 +2,15 @@ package rw.health.ubuzima.repository;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import rw.health.ubuzima.entity.Message;
+import rw.health.ubuzima.enums.MessageType;
 import rw.health.ubuzima.entity.User;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Repository
@@ -52,4 +52,17 @@ public interface MessageRepository extends JpaRepository<Message, Long> {
            "LEFT JOIN FETCH m.receiver " +
            "WHERE m.id = :messageId")
     Message findByIdWithUsers(@Param("messageId") Long messageId);
+
+    // Voice note cleanup queries
+    @Query("SELECT m FROM Message m WHERE m.messageType IN ('AUDIO', 'VOICE') AND m.createdAt < :cutoffDate AND m.audioUrl IS NOT NULL")
+    List<Message> findOldAudioMessages(@Param("cutoffDate") LocalDateTime cutoffDate);
+
+    @Query("SELECT COUNT(m) FROM Message m WHERE m.messageType IN ('AUDIO', 'VOICE') AND m.createdAt < :cutoffDate AND m.audioUrl IS NOT NULL")
+    long countOldAudioMessages(@Param("cutoffDate") LocalDateTime cutoffDate);
+
+    @Query("SELECT COUNT(m) FROM Message m WHERE m.messageType IN :messageTypes")
+    long countByMessageTypeIn(@Param("messageTypes") List<MessageType> messageTypes);
+
+    @Query("SELECT COALESCE(SUM(m.fileSize), 0) FROM Message m WHERE m.messageType IN ('AUDIO', 'VOICE') AND m.fileSize IS NOT NULL")
+    long sumAudioFileSize();
 }

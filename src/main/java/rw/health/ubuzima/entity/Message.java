@@ -64,4 +64,50 @@ public class Message extends BaseEntity {
 
     @Column(name = "metadata", columnDefinition = "TEXT")
     private String metadata; // JSON string for additional data
+
+    // WhatsApp-like features
+    @Column(name = "delivered_at")
+    private LocalDateTime deliveredAt;
+
+    @Column(name = "audio_duration")
+    private Integer audioDuration; // Duration in seconds for audio messages
+
+    @Column(name = "audio_url")
+    private String audioUrl; // URL for audio file
+
+    @Column(name = "file_size")
+    private Long fileSize; // File size in bytes
+
+    @Column(name = "mime_type")
+    private String mimeType; // MIME type for attachments
+
+    @Column(name = "thumbnail_url")
+    private String thumbnailUrl; // Thumbnail for images/videos
+
+    @Column(name = "is_forwarded")
+    private Boolean isForwarded = false;
+
+    @Column(name = "forwarded_from")
+    private String forwardedFrom; // Original sender info
+
+    @Column(name = "edited_at")
+    private LocalDateTime editedAt;
+
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
+
+    @Column(name = "deleted_for_everyone")
+    private Boolean deletedForEveryone = false;
+
+    @Column(name = "quoted_message_id")
+    private Long quotedMessageId; // For replying to specific messages
+
+    @Column(name = "message_status")
+    private String messageStatus = "SENT"; // SENT, DELIVERED, READ
+
+    @Column(name = "reaction")
+    private String reaction; // Emoji reaction
+
+    @Column(name = "starred")
+    private Boolean starred = false;
 }

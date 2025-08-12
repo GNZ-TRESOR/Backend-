@@ -57,4 +57,21 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long> 
 
     @Query("SELECT COUNT(a) FROM Appointment a WHERE a.healthWorker.id = :workerId AND DATE(a.scheduledDate) BETWEEN :startDate AND :endDate")
     long countByHealthWorkerIdAndScheduledDateBetween(@Param("workerId") Long workerId, @Param("startDate") LocalDate startDate, @Param("endDate") LocalDate endDate);
+
+    // Methods for appointment status scheduler
+    List<Appointment> findByStatusAndScheduledDateBefore(AppointmentStatus status, LocalDateTime dateTime);
+
+    List<Appointment> findByStatusAndScheduledDateBetween(AppointmentStatus status, LocalDateTime startDate, LocalDateTime endDate);
+
+    @Query("SELECT a FROM Appointment a WHERE a.scheduledDate BETWEEN :startTime AND :endTime AND a.status IN ('SCHEDULED', 'CONFIRMED') AND a.reminderSent = false")
+    List<Appointment> findAppointmentsForReminder(@Param("startTime") LocalDateTime startTime, @Param("endTime") LocalDateTime endTime);
+
+    // Enhanced queries for health worker dashboard
+    // Note: Removed findTodayAppointmentsByHealthWorker as it's not used and was causing startup issues
+
+    @Query("SELECT COUNT(a) FROM Appointment a WHERE a.healthWorker.id = :healthWorkerId AND a.status = 'COMPLETED'")
+    long countCompletedAppointmentsByHealthWorker(@Param("healthWorkerId") Long healthWorkerId);
+
+    @Query("SELECT COUNT(a) FROM Appointment a WHERE a.healthWorker.id = :healthWorkerId")
+    long countTotalAppointmentsByHealthWorker(@Param("healthWorkerId") Long healthWorkerId);
 }

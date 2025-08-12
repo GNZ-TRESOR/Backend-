@@ -15,6 +15,7 @@ import java.util.Map;
 @RequestMapping("/feedback")
 @RequiredArgsConstructor
 @CrossOrigin(origins = "*")
+@SuppressWarnings("unchecked")
 public class FeedbackController {
 
     @PostMapping

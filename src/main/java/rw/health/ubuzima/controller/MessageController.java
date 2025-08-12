@@ -98,25 +98,40 @@ public class MessageController {
             Message message = new Message();
             message.setSender(sender);
             message.setReceiver(receiver);
-            message.setContent(request.get("content").toString());
-            
+            message.setContent(request.get("content") != null ? request.get("content").toString() : null);
+
             // Generate conversation ID if not provided
-            String conversationId = request.get("conversationId") != null 
+            String conversationId = request.get("conversationId") != null
                 ? request.get("conversationId").toString()
                 : generateConversationId(senderId, receiverId);
             message.setConversationId(conversationId);
-            
+
             if (request.get("messageType") != null) {
                 message.setMessageType(MessageType.valueOf(request.get("messageType").toString().toUpperCase()));
             }
-            
+
             if (request.get("priority") != null) {
                 message.setPriority(MessagePriority.valueOf(request.get("priority").toString().toUpperCase()));
             }
-            
+
             if (request.get("isEmergency") != null) {
                 message.setIsEmergency(Boolean.valueOf(request.get("isEmergency").toString()));
             }
+
+            // WhatsApp-like features
+            if (request.get("quotedMessageId") != null) {
+                message.setQuotedMessageId(Long.valueOf(request.get("quotedMessageId").toString()));
+            }
+
+            if (request.get("isForwarded") != null) {
+                message.setIsForwarded(Boolean.valueOf(request.get("isForwarded").toString()));
+                if (request.get("forwardedFrom") != null) {
+                    message.setForwardedFrom(request.get("forwardedFrom").toString());
+                }
+            }
+
+            // Set initial status
+            message.setMessageStatus("SENT");
 
             Message savedMessage = messageRepository.save(message);
 
@@ -249,7 +264,8 @@ public class MessageController {
     @DeleteMapping("/{messageId}")
     public ResponseEntity<Map<String, Object>> deleteMessage(
             @PathVariable Long messageId,
-            @RequestParam Long requesterId) {
+            @RequestParam Long requesterId,
+            @RequestParam(defaultValue = "false") Boolean forEveryone) {
         try {
             Message message = messageRepository.findById(messageId).orElse(null);
 
@@ -268,7 +284,10 @@ public class MessageController {
                 ));
             }
 
-            messageRepository.delete(message);
+            // WhatsApp-like soft delete
+            message.setDeletedAt(LocalDateTime.now());
+            message.setDeletedForEveryone(forEveryone);
+            messageRepository.save(message);
 
             return ResponseEntity.ok(Map.of(
                 "success", true,
@@ -437,6 +456,155 @@ public class MessageController {
             return ResponseEntity.internalServerError().body(Map.of(
                 "success", false,
                 "message", "Failed to fetch emergency messages: " + e.getMessage()
+            ));
+        }
+    }
+
+    /**
+     * Update message status (delivered, read)
+     */
+    @PutMapping("/{id}/status")
+    public ResponseEntity<Map<String, Object>> updateMessageStatus(
+            @PathVariable Long id,
+            @RequestBody Map<String, String> request) {
+        try {
+            Message message = messageRepository.findById(id).orElse(null);
+            if (message == null) {
+                return ResponseEntity.notFound().build();
+            }
+
+            String status = request.get("status");
+            if (status != null) {
+                message.setMessageStatus(status.toUpperCase());
+
+                if ("DELIVERED".equals(status.toUpperCase())) {
+                    message.setDeliveredAt(LocalDateTime.now());
+                } else if ("READ".equals(status.toUpperCase())) {
+                    message.setIsRead(true);
+                    message.setReadAt(LocalDateTime.now());
+                }
+            }
+
+            messageRepository.save(message);
+
+            return ResponseEntity.ok(Map.of(
+                "success", true,
+                "message", "Message status updated successfully"
+            ));
+
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body(Map.of(
+                "success", false,
+                "message", "Failed to update message status: " + e.getMessage()
+            ));
+        }
+    }
+
+    /**
+     * Add reaction to message
+     */
+    @PostMapping("/{id}/reaction")
+    public ResponseEntity<Map<String, Object>> addReaction(
+            @PathVariable Long id,
+            @RequestBody Map<String, String> request) {
+        try {
+            Message message = messageRepository.findById(id).orElse(null);
+            if (message == null) {
+                return ResponseEntity.notFound().build();
+            }
+
+            String reaction = request.get("reaction");
+            message.setReaction(reaction);
+            messageRepository.save(message);
+
+            return ResponseEntity.ok(Map.of(
+                "success", true,
+                "message", "Reaction added successfully"
+            ));
+
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body(Map.of(
+                "success", false,
+                "message", "Failed to add reaction: " + e.getMessage()
+            ));
+        }
+    }
+
+    /**
+     * Star/unstar message
+     */
+    @PutMapping("/{id}/star")
+    public ResponseEntity<Map<String, Object>> toggleStar(
+            @PathVariable Long id,
+            @RequestBody Map<String, Boolean> request) {
+        try {
+            Message message = messageRepository.findById(id).orElse(null);
+            if (message == null) {
+                return ResponseEntity.notFound().build();
+            }
+
+            Boolean starred = request.get("starred");
+            message.setStarred(starred != null ? starred : !Boolean.TRUE.equals(message.getStarred()));
+            messageRepository.save(message);
+
+            return ResponseEntity.ok(Map.of(
+                "success", true,
+                "message", "Message star status updated successfully",
+                "starred", message.getStarred()
+            ));
+
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body(Map.of(
+                "success", false,
+                "message", "Failed to update star status: " + e.getMessage()
+            ));
+        }
+    }
+
+    /**
+     * Edit message content
+     */
+    @PutMapping("/{id}/edit")
+    public ResponseEntity<Map<String, Object>> editMessage(
+            @PathVariable Long id,
+            @RequestBody Map<String, String> request) {
+        try {
+            Message message = messageRepository.findById(id).orElse(null);
+            if (message == null) {
+                return ResponseEntity.notFound().build();
+            }
+
+            // Only sender can edit within 15 minutes
+            if (!message.getSender().getId().equals(Long.valueOf(request.get("requesterId")))) {
+                return ResponseEntity.status(403).body(Map.of(
+                    "success", false,
+                    "message", "You can only edit your own messages"
+                ));
+            }
+
+            // Check if message is within edit time limit (15 minutes)
+            if (message.getCreatedAt().isBefore(LocalDateTime.now().minusMinutes(15))) {
+                return ResponseEntity.badRequest().body(Map.of(
+                    "success", false,
+                    "message", "Messages can only be edited within 15 minutes"
+                ));
+            }
+
+            String newContent = request.get("content");
+            message.setContent(newContent);
+            message.setEditedAt(LocalDateTime.now());
+            messageRepository.save(message);
+
+            return ResponseEntity.ok(Map.of(
+                "success", true,
+                "message", "Message edited successfully",
+                "messageData", message
+            ));
+
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body(Map.of(
+                "success", false,
+                "message", "Failed to edit message: " + e.getMessage()
             ));
         }
     }

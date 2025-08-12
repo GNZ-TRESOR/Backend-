@@ -18,6 +18,9 @@ import rw.health.ubuzima.repository.TimeSlotRepository;
 import rw.health.ubuzima.constants.ErrorCodes;
 import rw.health.ubuzima.dto.response.ApiResponse;
 import rw.health.ubuzima.enums.UserRole;
+
+import java.util.HashMap;
+import java.util.Map;
 import rw.health.ubuzima.service.InteractiveNotificationService;
 import rw.health.ubuzima.service.UserMessageService;
 import rw.health.ubuzima.util.JwtUtil;
@@ -27,7 +30,6 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 @RestController
 @RequestMapping("/appointments")
@@ -178,14 +180,17 @@ public class AppointmentController {
     public ResponseEntity<Map<String, Object>> getAppointment(@PathVariable Long id) {
         try {
             Appointment appointment = appointmentRepository.findById(id).orElse(null);
-            
+
             if (appointment == null) {
                 return ResponseEntity.notFound().build();
             }
 
+            // Build comprehensive appointment details
+            Map<String, Object> appointmentDetails = buildAppointmentDetails(appointment);
+
             return ResponseEntity.ok(Map.of(
                 "success", true,
-                "appointment", appointment
+                "appointment", appointmentDetails
             ));
 
         } catch (Exception e) {
@@ -343,5 +348,167 @@ public class AppointmentController {
         }
         
         return slots;
+    }
+
+
+
+    /**
+     * Build comprehensive appointment details
+     */
+    private Map<String, Object> buildAppointmentDetails(Appointment appointment) {
+        Map<String, Object> details = new HashMap<>();
+
+        // Basic appointment information
+        details.put("id", appointment.getId());
+        details.put("appointmentType", appointment.getAppointmentType());
+        details.put("status", appointment.getStatus());
+        details.put("scheduledDate", appointment.getScheduledDate());
+        details.put("durationMinutes", appointment.getDurationMinutes());
+        details.put("reason", appointment.getReason());
+        details.put("notes", appointment.getNotes());
+        details.put("reminderSent", appointment.getReminderSent());
+        details.put("completedAt", appointment.getCompletedAt());
+        details.put("cancelledAt", appointment.getCancelledAt());
+        details.put("cancellationReason", appointment.getCancellationReason());
+        details.put("createdAt", appointment.getCreatedAt());
+        details.put("updatedAt", appointment.getUpdatedAt());
+
+        // Client information
+        if (appointment.getUser() != null) {
+            Map<String, Object> clientInfo = new HashMap<>();
+            clientInfo.put("id", appointment.getUser().getId());
+            clientInfo.put("name", appointment.getUser().getName());
+            clientInfo.put("email", appointment.getUser().getEmail());
+            clientInfo.put("phone", appointment.getUser().getPhone());
+            clientInfo.put("dateOfBirth", appointment.getUser().getDateOfBirth());
+            clientInfo.put("gender", appointment.getUser().getGender());
+            clientInfo.put("village", appointment.getUser().getVillage());
+            details.put("client", clientInfo);
+        }
+
+        // Health worker information
+        if (appointment.getHealthWorker() != null) {
+            Map<String, Object> healthWorkerInfo = new HashMap<>();
+            healthWorkerInfo.put("id", appointment.getHealthWorker().getId());
+            healthWorkerInfo.put("name", appointment.getHealthWorker().getName());
+            healthWorkerInfo.put("email", appointment.getHealthWorker().getEmail());
+            healthWorkerInfo.put("phone", appointment.getHealthWorker().getPhone());
+            // Note: Specialization field not available in User entity, using role instead
+            healthWorkerInfo.put("specialization", appointment.getHealthWorker().getRole().toString());
+            details.put("healthWorker", healthWorkerInfo);
+        }
+
+        // Health facility information
+        if (appointment.getHealthFacility() != null) {
+            Map<String, Object> facilityInfo = new HashMap<>();
+            facilityInfo.put("id", appointment.getHealthFacility().getId());
+            facilityInfo.put("name", appointment.getHealthFacility().getName());
+            facilityInfo.put("address", appointment.getHealthFacility().getAddress());
+            facilityInfo.put("phone", appointment.getHealthFacility().getPhoneNumber());
+            facilityInfo.put("email", appointment.getHealthFacility().getEmail());
+            facilityInfo.put("type", appointment.getHealthFacility().getFacilityType());
+            details.put("facility", facilityInfo);
+        }
+
+        // Status information
+        details.put("statusInfo", getStatusInfo(appointment));
+
+        // Timeline information
+        details.put("timeline", getAppointmentTimeline(appointment));
+
+        return details;
+    }
+
+    /**
+     * Get status-specific information
+     */
+    private Map<String, Object> getStatusInfo(Appointment appointment) {
+        Map<String, Object> statusInfo = new HashMap<>();
+        statusInfo.put("current", appointment.getStatus());
+        statusInfo.put("canCancel", canCancelAppointment(appointment));
+        statusInfo.put("canReschedule", canRescheduleAppointment(appointment));
+        statusInfo.put("canComplete", canCompleteAppointment(appointment));
+        statusInfo.put("canConfirm", canConfirmAppointment(appointment));
+
+        return statusInfo;
+    }
+
+    /**
+     * Get appointment timeline
+     */
+    private List<Map<String, Object>> getAppointmentTimeline(Appointment appointment) {
+        List<Map<String, Object>> timeline = new ArrayList<>();
+
+        // Created
+        timeline.add(Map.of(
+            "event", "Appointment Created",
+            "timestamp", appointment.getCreatedAt(),
+            "status", "SCHEDULED",
+            "description", "Appointment was booked"
+        ));
+
+        // Confirmed (if applicable)
+        if (appointment.getStatus() != AppointmentStatus.SCHEDULED) {
+            timeline.add(Map.of(
+                "event", "Status Changed",
+                "timestamp", appointment.getUpdatedAt(),
+                "status", appointment.getStatus(),
+                "description", getStatusDescription(appointment.getStatus())
+            ));
+        }
+
+        // Completed (if applicable)
+        if (appointment.getCompletedAt() != null) {
+            timeline.add(Map.of(
+                "event", "Appointment Completed",
+                "timestamp", appointment.getCompletedAt(),
+                "status", "COMPLETED",
+                "description", "Appointment was completed successfully"
+            ));
+        }
+
+        // Cancelled (if applicable)
+        if (appointment.getCancelledAt() != null) {
+            timeline.add(Map.of(
+                "event", "Appointment Cancelled",
+                "timestamp", appointment.getCancelledAt(),
+                "status", "CANCELLED",
+                "description", appointment.getCancellationReason() != null ?
+                    appointment.getCancellationReason() : "Appointment was cancelled"
+            ));
+        }
+
+        return timeline;
+    }
+
+    private String getStatusDescription(AppointmentStatus status) {
+        return switch (status) {
+            case CONFIRMED -> "Appointment was confirmed by health worker";
+            case IN_PROGRESS -> "Appointment is currently in progress";
+            case COMPLETED -> "Appointment was completed successfully";
+            case CANCELLED -> "Appointment was cancelled";
+            case NO_SHOW -> "Client did not show up for appointment";
+            case RESCHEDULED -> "Appointment was rescheduled";
+            default -> "Appointment status updated";
+        };
+    }
+
+    private boolean canCancelAppointment(Appointment appointment) {
+        return appointment.getStatus() == AppointmentStatus.SCHEDULED ||
+               appointment.getStatus() == AppointmentStatus.CONFIRMED;
+    }
+
+    private boolean canRescheduleAppointment(Appointment appointment) {
+        return appointment.getStatus() == AppointmentStatus.SCHEDULED ||
+               appointment.getStatus() == AppointmentStatus.CONFIRMED;
+    }
+
+    private boolean canCompleteAppointment(Appointment appointment) {
+        return appointment.getStatus() == AppointmentStatus.CONFIRMED ||
+               appointment.getStatus() == AppointmentStatus.IN_PROGRESS;
+    }
+
+    private boolean canConfirmAppointment(Appointment appointment) {
+        return appointment.getStatus() == AppointmentStatus.SCHEDULED;
     }
 }
